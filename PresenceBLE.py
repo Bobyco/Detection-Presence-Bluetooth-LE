@@ -1,4 +1,4 @@
-# bluetooth low energy scan
+#Bluetooth Low energy Presence Detection Tag
 from bluetooth.ble import DiscoveryService
 import time
 import RPi.GPIO as GPIO
