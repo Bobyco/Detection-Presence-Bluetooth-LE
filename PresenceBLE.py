@@ -1,53 +1,108 @@
-#Bluetooth Low energy Presence Detection Tag
+# bluetooth low energy scan
 from bluetooth.ble import DiscoveryService
 import time
 import RPi.GPIO as GPIO
+import os
 
-mac = "EA:91:0F:D0:E2:57" # Adresse Mac a detecter
+# Configuration
+mac = "EA:91:0F:D0:E2:57" # Adresse Mac a detecter.
+delaiNonPresence = 15 # Delai auquel le scripte doit effectuer une action quand l'adresse mac n'est pas detecter.
+delaiPresence = 15 # Delai auquel le scripte doit effectuer une action quand l'adresse mac est detecter.
+delaiScan = 10 # Durer du scan.
+gpioControle = 2 # GPIO a controler.
+#Fin de configuration
 
-co = 0
-print co
 
 GPIO.setwarnings(False) # Desactivation des warnings
 GPIO.setmode(GPIO.BCM) # Numerotation BCM
-GPIO.setup(2, GPIO.OUT, initial=GPIO.LOW) # Initialisation GPIO 2 , OUT et LOW
+GPIO.setup(gpioControle, GPIO.OUT, initial=GPIO.LOW) # Initialisation du GPIO
+
+colors = {'gris': 30, 'rouge': 31, 'vert': 32, 'jaune': 33, 'blue': 34, 'magenta': 35, 'cyan': 36, 'blanc': 37}
+
+def couleur(choixCouleur):
+	print ("\033[1;%d;40m" %(colors.get(choixCouleur)))
+
+print ("Adresse a detecter : %s -- GPIO a controler : %s" %(mac, gpioControle))
+print ("Durer du scan : %s -- Confirmation de presence %s -- Confirmation de non presence %s" %(delaiScan, delaiPresence, delaiNonPresence))
 
 
-print "-- Test GPIO ---"
-i = 0
-while i < 6:
-	GPIO.output (2, not GPIO.input(2))
-	i = i + 1
-	time.sleep(.6)
-print "--- Fin Du Test ---"
 
-Presence__NOK = 0
+timeNonPresent = 0
+timePresent = 0
+compteurBoucle = 0
+boolNonPresence = 0
 
 while True:
 
 
-	service = DiscoveryService()
-	devices = service.discover(10)
-
+	couleur("blanc")
 	print ("-------------------------------------------------")
-	print "Boucle N : %s" % co
+	print ("Boucle numero: %s" % compteurBoucle)
+	print (time.strftime("%H:%M:%S - Debut du scan ...")) #Affichage de l'heur.
+	print ("timePresent : %d --- timeNonPresent : %d" %(timePresent,timeNonPresent))
+	startTime = time.time() # Debut du chrono.
 
+	boolNonPresence = 0 # Mise a zero du compteur de presence pendant la boucle.
+	boolPresence = 0 # Mise a zero du compteur de presence pendant la boucle.
+
+	service = DiscoveryService()
+	devices = service.discover(delaiScan)
+
+	couleur("magenta")
 
 	for address, name in devices.items():
-	        print("name: {}, address: {}".format(name, address))
-		if (address == mac):
-			print "OK"
-			GPIO.output(2,GPIO.HIGH)
-			Presence__NOK = 0
-			break
-		else:
-			if Presence__NOK < 30:
-				print "NOK"
-				Presence__NOK = Presence__NOK + 1
-				print "Compteur de non presence : %s" % Presence__NOK
-			else:
-				print "Compteur de non presence superieur a 30"
-				GPIO.output(2, GPIO.LOW)
 
-	co = co + 1
-	time.sleep(10)
+	        print("name: {}, address: {}".format(name, address))
+
+		if (address == mac): # Adresse mac detecter
+			couleur("cyan")
+			print ("L'adresse numero " + mac + " a etait detecter")
+			stopTime = time.time()
+			timePresent = (timePresent + int(stopTime - startTime))
+
+			print("timePresent %s" % timePresent)
+			print("timeNonPresent %s" % timeNonPresent)
+
+			boolNonPresence = 0
+
+			if timePresent >= delaiPresence:
+				couleur("jaune")
+				print ("Presence confirmer.")
+				GPIO.output(gpioControle,GPIO.HIGH)
+				break
+
+			else:
+				couleur("jaune")
+				print("Presence detecter, attente du delai choisie pour confirmation de presence.")
+				timeNonPresent = 0
+				break
+
+		else:
+			if boolNonPresence == 0:
+				boolNonPresence = 1
+
+
+	couleur("blanc")
+	print (time.strftime("%H:%M:%S - Fin du scan ..."))
+				
+
+
+	# Si aucune presence detecter pendant le scan.
+	if boolNonPresence == 1:
+		couleur("jaune") 
+		print("Aucune presence detecter pendant le scan")
+		stopTime = time.time()
+		timeNonPresent = (timeNonPresent + int(stopTime - startTime))
+		print("timeNonPresent %s" % timeNonPresent)
+
+	# Si aucune presence pendant le temps choisie.
+	if timeNonPresent >= delaiNonPresence:
+		couleur("rouge")
+		timePresent = 0
+		print ("Aucune presence depuis plus de %s secondes" %delaiNonPresence)
+		GPIO.output(gpioControle, GPIO.LOW)
+
+	couleur("blanc")
+
+	compteurBoucle = compteurBoucle + 1
+	time.sleep(0.1)
